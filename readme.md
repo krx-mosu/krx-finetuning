@@ -1,9 +1,12 @@
-````markdown
 # KMMLU 금융시장 데이터셋 처리 및 확장 프로젝트
 
 ## 프로젝트 개요
 
 이 프로젝트는 KMMLU(Korean Multiple-choice Multi-task Language Understanding) 데이터셋을 기반으로 금융시장 관련 문제들을 고품질의 학습 데이터셋으로 변환하고 확장하는 것을 목적으로 합니다. 최종적으로 이 데이터셋은 LLM(Large Language Model)의 금융시장 관련 문제 해결 능력을 향상시키기 위한 파인튜닝에 활용됩니다.
+
+https://krxbench.koscom.co.kr/home/main
+
+https://apricot-behavior-a37.notion.site/KRX-50588b553b4e4d3e9cf398c67c5a188f
 
 ## 목표
 
@@ -127,7 +130,7 @@
   }
 ]
 ```
-````
+
 
 ## 사용 방법
 
@@ -180,6 +183,4 @@
    - 처리 속도 개선
    - 비용 효율성 향상
 
-```
 
-```
