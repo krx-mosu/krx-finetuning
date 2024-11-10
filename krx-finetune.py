@@ -1,8 +1,6 @@
 from openai import OpenAI
 
-client = OpenAI(
-    api_key="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"
-)
+client = OpenAI(api_key="")
 import json
 import pandas as pd
 from datasets import load_dataset

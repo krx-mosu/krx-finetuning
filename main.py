@@ -1,4 +1,3 @@
-
 import pandas as pd
 import json
 import time
@@ -15,13 +14,14 @@ from pathlib import Path
 from google.colab import files
 
 # OpenAI API 키 설정
-OPENAI_API_KEY =""
+client = OpenAI(api_key="")
 # URL 설정
 KMMLU_URLS = {
-    'train': 'https://huggingface.co/datasets/HAERAE-HUB/KMMLU/resolve/main/data/Economics-train.csv',
-    'dev': 'https://huggingface.co/datasets/HAERAE-HUB/KMMLU/resolve/main/data/Economics-dev.csv',
-    'test': 'https://huggingface.co/datasets/HAERAE-HUB/KMMLU/resolve/main/data/Economics-test.csv'
+    "train": "https://huggingface.co/datasets/HAERAE-HUB/KMMLU/resolve/main/data/Economics-train.csv",
+    "dev": "https://huggingface.co/datasets/HAERAE-HUB/KMMLU/resolve/main/data/Economics-dev.csv",
+    "test": "https://huggingface.co/datasets/HAERAE-HUB/KMMLU/resolve/main/data/Economics-test.csv",
 }
+
 
 class DatasetProcessor:
     def __init__(self, api_key: str, base_dir: str = "/content/kmmlu_processing"):
@@ -29,45 +29,49 @@ class DatasetProcessor:
         self.base_dir = Path(base_dir)
         self.setup_directories()
         self.setup_logging()
-        
+
     def setup_directories(self):
         self.data_dir = self.base_dir / "data"
         self.output_dir = self.base_dir / "output"
         self.log_dir = self.base_dir / "logs"
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        
+
         for dir_path in [self.data_dir, self.output_dir, self.log_dir]:
             dir_path.mkdir(parents=True, exist_ok=True)
-    
+
     def setup_logging(self):
         logging.basicConfig(
             level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s',
+            format="%(asctime)s - %(levelname)s - %(message)s",
             handlers=[
-                logging.FileHandler(self.log_dir / f'processing_{self.timestamp}.log', encoding='utf-8'),
-                logging.StreamHandler()
-            ]
+                logging.FileHandler(
+                    self.log_dir / f"processing_{self.timestamp}.log", encoding="utf-8"
+                ),
+                logging.StreamHandler(),
+            ],
         )
 
     @backoff.on_exception(backoff.expo, Exception, max_tries=5)
     def call_openai_api(self, messages: List[Dict], temp: float = 0.7) -> str:
-        return self.client.chat.completions.create(
-            model="gpt-4",
-            messages=messages,
-            temperature=temp
-        ).choices[0].message.content
+        return (
+            self.client.chat.completions.create(
+                model="gpt-4o", messages=messages, temperature=temp
+            )
+            .choices[0]
+            .message.content
+        )
 
     def download_dataset(self, url: str, output_path: str) -> str:
         try:
             response = requests.get(url, stream=True)
             response.raise_for_status()
-            total_size = int(response.headers.get('content-length', 0))
-            
+            total_size = int(response.headers.get("content-length", 0))
+
             output_path = Path(output_path)
-            with open(output_path, 'wb') as file, tqdm(
+            with open(output_path, "wb") as file, tqdm(
                 desc=f"Downloading {output_path.name}",
                 total=total_size,
-                unit='iB',
+                unit="iB",
                 unit_scale=True,
                 unit_divisor=1024,
             ) as pbar:
@@ -87,20 +91,22 @@ class DatasetProcessor:
 - 투자 전략과 의사결정
 - 실제 금융 시나리오 기반 문제해결
 답변은 True 또는 False로만 해주세요."""
-        
+
         try:
             response = self.call_openai_api(
                 [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": question}
+                    {"role": "user", "content": question},
                 ],
-                temp=0.1
+                temp=0.1,
             )
             return response.strip().lower() == "true"
         except Exception:
             return False
 
-    def transform_question(self, question: str, choices: Dict[str, str]) -> Optional[str]:
+    def transform_question(
+        self, question: str, choices: Dict[str, str]
+    ) -> Optional[str]:
         system_prompt = """금융시장 관련 문제를 아래 형식으로 변환해주세요:
 
 다음 문제를 읽고 정답으로 가장 알맞은 것을 고르시요.
@@ -126,7 +132,10 @@ G. [G보기]
             return self.call_openai_api(
                 [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"원본 문제: {question}\n원본 선택지: {choices}"}
+                    {
+                        "role": "user",
+                        "content": f"원본 문제: {question}\n원본 선택지: {choices}",
+                    },
                 ]
             )
         except Exception as e:
@@ -162,23 +171,26 @@ G. [G보기]
             solution = self.call_openai_api(
                 [
                     {"role": "system", "content": system_prompt_solution},
-                    {"role": "user", "content": solution_prompt}
+                    {"role": "user", "content": solution_prompt},
                 ]
             )
-            
+
             # 스텝 2: 최종 답변 생성
             answer_prompt = solution_prompt + "\n" + solution
             final_answer = self.call_openai_api(
                 [
-                    {"role": "system", "content": "풀이를 바탕으로 최종 정답을 선택지 중에서 선택하여 알파벳으로만 답해주세요."},
-                    {"role": "user", "content": answer_prompt}
+                    {
+                        "role": "system",
+                        "content": "풀이를 바탕으로 최종 정답을 선택지 중에서 선택하여 알파벳으로만 답해주세요.",
+                    },
+                    {"role": "user", "content": answer_prompt},
                 ],
-                temp=0.1
+                temp=0.1,
             )
-            
+
             return (
                 {"prompt": solution_prompt, "response": solution},
-                {"prompt": answer_prompt, "response": final_answer}
+                {"prompt": answer_prompt, "response": final_answer},
             )
         except Exception as e:
             logging.error(f"문제 풀이 생성 실패: {str(e)}")
@@ -224,15 +236,14 @@ G. [G보기]
         8. 외환 시장 및 국제 금융"""
 
             question = self.call_openai_api(
-                [{"role": "system", "content": system_prompt}],
-                temp=0.9
+                [{"role": "system", "content": system_prompt}], temp=0.9
             )
-            
+
             result = self.create_problem_solution(question)
             if result:
                 return list(result)
             return None
-            
+
         except Exception as e:
             logging.error(f"추가 문제 생성 실패: {str(e)}")
             return None
@@ -240,123 +251,136 @@ G. [G보기]
     def save_results(self, pairs: List[Dict], is_final: bool = False):
         """결과 저장"""
         file_prefix = "final" if is_final else "interim"
-        output_file = self.output_dir / f"{file_prefix}_training_data_{self.timestamp}.json"
-        with open(output_file, 'w', encoding='utf-8') as f:
+        output_file = (
+            self.output_dir / f"{file_prefix}_training_data_{self.timestamp}.json"
+        )
+        with open(output_file, "w", encoding="utf-8") as f:
             json.dump(pairs, f, ensure_ascii=False, indent=2)
         logging.info(f"{file_prefix.capitalize()} 결과 저장 완료: {len(pairs)}개 쌍")
 
-    def process_dataset(self, input_file: str, max_workers: int = 100) -> None:
+    def process_dataset(self, input_file: str, max_workers: int = 10) -> None:
         """데이터셋 처리 메인 파이프라인"""
         try:
             df = pd.read_csv(input_file)
             logging.info(f"데이터 로드 완료 - 총 {len(df)}개 문제")
-            
+
             training_pairs = []
             save_interval = 50  # 50개 문제마다 중간 결과 저장
-            
+
             # 기존 문제 처리
             filtered_questions = []
-            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=max_workers
+            ) as executor:
                 future_to_question = {
-                    executor.submit(self.is_financial_market_question, row['question']): (idx, row)
+                    executor.submit(
+                        self.is_financial_market_question, row["question"]
+                    ): (idx, row)
                     for idx, row in df.iterrows()
                 }
-                
+
                 for future in tqdm(
                     concurrent.futures.as_completed(future_to_question),
                     total=len(df),
-                    desc="문제 필터링 중"
+                    desc="문제 필터링 중",
                 ):
                     if future.result():
                         idx, row = future_to_question[future]
-                        filtered_questions.append((
-                            idx,
-                            row['question'],
-                            {f"{chr(65+i)}": row[chr(65+i)] for i in range(4)}
-                        ))
-            
+                        filtered_questions.append(
+                            (
+                                idx,
+                                row["question"],
+                                {f"{chr(65+i)}": row[chr(65 + i)] for i in range(4)},
+                            )
+                        )
+
             logging.info(f"필터링 후 남은 문제: {len(filtered_questions)}개")
-            
+
             # 문제 변환 및 풀이 생성 (병렬)
-            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=max_workers
+            ) as executor:
                 # 문제 변환
                 future_to_question = {
                     executor.submit(self.transform_question, q[1], q[2]): q
                     for q in filtered_questions
                 }
-                
+
                 transformed_questions = []
                 for future in tqdm(
                     concurrent.futures.as_completed(future_to_question),
                     total=len(filtered_questions),
-                    desc="문제 변환 중"
+                    desc="문제 변환 중",
                 ):
                     if future.result():
                         transformed_questions.append(future.result())
-                
+
                 # 풀이 생성
                 future_to_transformed = {
                     executor.submit(self.create_problem_solution, q): q
                     for q in transformed_questions
                 }
-                
+
                 for future in tqdm(
                     concurrent.futures.as_completed(future_to_transformed),
                     total=len(transformed_questions),
-                    desc="풀이 생성 중"
+                    desc="풀이 생성 중",
                 ):
                     result = future.result()
                     if result:
                         training_pairs.extend(list(result))
-                        
+
                         if len(training_pairs) % (save_interval * 2) == 0:
                             self.save_results(training_pairs)
-            
+
             # 추가 문제 생성 (병렬)
             needed_pairs = 2000 - len(training_pairs)
             if needed_pairs > 0:
                 logging.info(f"추가로 {needed_pairs//2}개의 문제 생성 필요")
-                with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                with concurrent.futures.ThreadPoolExecutor(
+                    max_workers=max_workers
+                ) as executor:
                     futures = [
                         executor.submit(self.generate_single_question)
                         for _ in range(needed_pairs // 2)
                     ]
-                    
+
                     for future in tqdm(
                         concurrent.futures.as_completed(futures),
                         total=needed_pairs // 2,
-                        desc="추가 문제 생성 중"
+                        desc="추가 문제 생성 중",
                     ):
                         result = future.result()
                         if result:
                             training_pairs.extend(result)
-                            
+
                             if len(training_pairs) % (save_interval * 2) == 0:
                                 self.save_results(training_pairs)
-            
+
             # 최종 결과 저장
             if len(training_pairs) > 2000:
                 training_pairs = training_pairs[:2000]
             self.save_results(training_pairs, is_final=True)
-            
+
             # 통계 저장
             stats = {
                 "original_questions": len(df),
                 "filtered_questions": len(filtered_questions),
                 "final_pairs": len(training_pairs),
                 "target_achieved": len(training_pairs) == 2000,
-                "timestamp": self.timestamp
+                "timestamp": self.timestamp,
             }
-            
+
             stats_file = self.output_dir / f"processing_stats_{self.timestamp}.json"
-            with open(stats_file, 'w', encoding='utf-8') as f:
+            with open(stats_file, "w", encoding="utf-8") as f:
                 json.dump(stats, f, ensure_ascii=False, indent=2)
-            
+
             logging.info(f"처리 완료 - 최종 프롬프트-응답 쌍: {len(training_pairs)}개")
-            
+
         except Exception as e:
             logging.error(f"데이터셋 처리 중 오류 발생: {str(e)}")
             raise
+
 
 def main():
     """메인 실행 함수"""
@@ -369,13 +393,12 @@ def main():
         # 데이터셋 다운로드 및 처리
         for dataset_type, url in KMMLU_URLS.items():
             logging.info(f"{dataset_type} 데이터셋 처리 시작")
-            
+
             # 데이터셋 다운로드
             input_file = processor.download_dataset(
-                url,
-                processor.data_dir / f"Economics-{dataset_type}.csv"
+                url, processor.data_dir / f"Economics-{dataset_type}.csv"
             )
-            
+
             # 데이터셋 처리
             processor.process_dataset(input_file)
             logging.info(f"{dataset_type} 데이터셋 처리 완료")
@@ -389,6 +412,7 @@ def main():
     except Exception as e:
         logging.error(f"처리 중 오류 발생: {str(e)}")
         raise
+
 
 if __name__ == "__main__":
     main()
